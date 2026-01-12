@@ -23,6 +23,11 @@ A Flask-based web application for tracking room sign-in and sign-out times. User
 ## Installation
 
 1. Install dependencies:
+
+```bash
+python3 -m venv .venv
+```
+   
 ```bash
 pip install -r requirements.txt
 ```
@@ -33,6 +38,10 @@ pip install -r requirements.txt
    - `templates/` - HTML templates
    - `docx_templates/` - DOCX template file
    - `exports/` - Export output directory
+
+3. Change the following:
+  - `data/logs.json` - This is an array of all the valid names to be autofilled. The names to be autofilled will also be stored in cache and can be cleared with a browser history reset.
+  - `docx_templates/FH306 Sign-In Sheet.docx` - This is the template for the word document that all of the exported files will be saved with.
 
 ## Usage
 
