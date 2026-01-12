@@ -1,0 +1,31 @@
+body {
+    margin: 0;
+    padding: 0;
+    background: linear-gradient(135deg, #4a90e2, #9013fe);
+    background-attachment: fixed;
+    font-family: "Segoe UI", sans-serif;
+    color: #fff;
+}
+
+.main-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 40px 0;
+}
+
+.form-card, .log-card {
+    width: 900px;
+    border-radius: 15px;
+}
+
+.admin-link {
+    color: #000;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.admin-link:hover {
+    text-decoration: underline;
+}

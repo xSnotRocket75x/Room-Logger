@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Logs</title>
+    <link rel="stylesheet" href="/static/bootstrap.min.css">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+<div class="main-container">
+    <div class="card shadow-lg p-4 log-card" style="max-width: 900px; max-height: 90vh;">
+
+        <h2 class="text-center fw-bold mb-3">Room Entry Logs</h2>
+
+        <!-- Success Message -->
+        {% if message %}
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endif %}
+
+        <!-- Date Filter -->
+        <form method="get" action="/admin" class="mb-4" id="filterForm">
+            <label class="fw-semibold">Filter Options:</label>
+            <div class="d-flex gap-3 align-items-end">
+                <div class="flex-grow-1">
+                    <label class="form-label small">Filter Type:</label>
+                    <select name="filter_type" id="filterType" class="form-select">
+                        <option value="all" {% if filter_type == 'all' or not filter_type %}selected{% endif %}>All Dates</option>
+                        <option value="date" {% if filter_type == 'date' %}selected{% endif %}>Single Date</option>
+                        <option value="week" {% if filter_type == 'week' %}selected{% endif %}>Working Week</option>
+                    </select>
+                </div>
+                
+                <div class="flex-grow-1" id="dateSelector">
+                    <label class="form-label small">Select Date:</label>
+                    <select name="date" class="form-select">
+                        <option value="">-- Select Date --</option>
+                        {% for date in dates %}
+                        <option value="{{ date }}"
+                            {% if selected_date == date %}selected{% endif %}>
+                            {{ date }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="flex-grow-1" id="weekSelector">
+                    <label class="form-label small">Select Week (any date in week):</label>
+                    <input type="date" name="week_date" class="form-select" value="{{ week_date or '' }}" id="weekDateInput">
+                </div>
+            </div>
+        </form>
+
+        <!-- Scrollable Logs Table -->
+        <div class="table-responsive" style="max-height: 60vh; overflow-y: auto;">
+            <table class="table table-hover table-bordered align-middle mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Name</th>
+                        <th>Action</th>
+                        <th>Timestamp</th>
+                        <th style="width: 120px;">Remove</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                    <tr>
+                        <td>{{ log.name }}</td>
+                        <td>{{ log.action }}</td>
+                        <td>
+                            <form method="POST" action="/edit/{{ log.id }}" class="d-flex gap-1">
+                                {% if filter_type %}
+                                <input type="hidden" name="filter_type" value="{{ filter_type }}">
+                                {% endif %}
+                                {% if selected_date %}
+                                <input type="hidden" name="date" value="{{ selected_date }}">
+                                {% endif %}
+                                {% if week_date %}
+                                <input type="hidden" name="week_date" value="{{ week_date }}">
+                                {% endif %}
+                                <input type="text" name="timestamp" value="{{ log.timestamp }}"
+                                    class="form-control form-control-sm">
+                                <button class="btn btn-sm btn-success">Save</button>
+                            </form>
+                        </td>
+
+                        <td>
+                            <a href="/remove/{{ log.id }}" class="btn btn-sm btn-danger delete-link" data-log-id="{{ log.id }}">Delete</a>
+                        </td>
+
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Export Buttons -->
+        <div class="text-center mt-3 d-flex gap-2 justify-content-center">
+            <button onclick="exportCSV()" class="btn btn-primary btn-lg">
+                Export CSV
+            </button>
+            <button onclick="exportDocx()" class="btn btn-success btn-lg">
+                Export Docx Files
+            </button>
+        </div>
+        
+        <script>
+        // Auto-submit form when dropdown changes and preserve filter parameters in delete links
+        document.addEventListener('DOMContentLoaded', function() {
+            // Preserve filter parameters in delete links
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlFilterType = urlParams.get('filter_type') || '{{ filter_type|default("") }}';
+            const urlSelectedDate = urlParams.get('date') || '{{ selected_date|default("") }}';
+            const urlWeekDate = urlParams.get('week_date') || '{{ week_date|default("") }}';
+            
+            // Update all delete links to include filter parameters
+            document.querySelectorAll('.delete-link').forEach(link => {
+                const params = new URLSearchParams();
+                if (urlFilterType) params.set('filter_type', urlFilterType);
+                if (urlSelectedDate) params.set('date', urlSelectedDate);
+                if (urlWeekDate) params.set('week_date', urlWeekDate);
+                
+                const queryString = params.toString();
+                if (queryString) {
+                    link.href = link.href + '?' + queryString;
+                }
+            });
+            
+            // Auto-submit form when dropdown changes
+            const filterForm = document.getElementById('filterForm');
+            const filterTypeSelect = document.getElementById('filterType');
+            const dateSelector = document.getElementById('dateSelector');
+            const weekSelector = document.getElementById('weekSelector');
+            const weekDateInput = document.getElementById('weekDateInput');
+            
+            // Show/hide selectors based on filter type
+            function updateSelectors() {
+                const type = filterTypeSelect.value;
+                if (type === 'date') {
+                    dateSelector.style.display = 'block';
+                    weekSelector.style.display = 'none';
+                } else if (type === 'week') {
+                    dateSelector.style.display = 'none';
+                    weekSelector.style.display = 'block';
+                } else {
+                    dateSelector.style.display = 'none';
+                    weekSelector.style.display = 'none';
+                }
+            }
+            
+            // Initialize selectors on page load (before event listeners)
+            updateSelectors();
+            
+            // Auto-submit on filter type change
+            filterTypeSelect.addEventListener('change', function() {
+                updateSelectors();
+                filterForm.submit();
+            });
+            
+            // Auto-submit on date selection
+            const dateSelect = document.querySelector('select[name="date"]');
+            if (dateSelect) {
+                dateSelect.addEventListener('change', function() {
+                    filterForm.submit();
+                });
+            }
+            
+            // Auto-submit on week date selection
+            if (weekDateInput) {
+                weekDateInput.addEventListener('change', function() {
+                    filterForm.submit();
+                });
+            }
+        });
+        
+        function getFilterParams() {
+            const filterType = document.getElementById('filterType').value;
+            const dateSelect = document.querySelector('select[name="date"]');
+            const weekDateInput = document.getElementById('weekDateInput');
+            
+            if (filterType === 'date' && dateSelect && dateSelect.value) {
+                return `date=${encodeURIComponent(dateSelect.value)}`;
+            } else if (filterType === 'week' && weekDateInput && weekDateInput.value) {
+                return `week_date=${encodeURIComponent(weekDateInput.value)}`;
+            }
+            return '';
+        }
+        
+        function exportCSV() {
+            const params = getFilterParams();
+            const url = params ? `/export?${params}` : '/export';
+            window.location.href = url;
+        }
+        
+        function exportDocx() {
+            const params = getFilterParams();
+            const url = params ? `/export_docx?${params}` : '/export_docx';
+            window.location.href = url;
+        }
+        </script>
+
+        <div class="text-center mt-3">
+            <a href="/" class="admin-link">Back to Sign-In</a>
+        </div>
+
+    </div>
+</div>
+<script src="/static/bootstrap.bundle.min.js"></script>
+</body>
+</html>
