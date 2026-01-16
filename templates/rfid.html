@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>RFID Card Management</title>
+    <link rel="stylesheet" href="/static/bootstrap.min.css">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+<div class="main-container">
+    <div class="card shadow-lg p-4 log-card" style="max-width: 900px; max-height: 90vh;">
+
+        <h2 class="text-center fw-bold mb-3">RFID Card Management</h2>
+
+        <!-- Success/Error Message -->
+        {% if message %}
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endif %}
+        
+        {% if request.args.get('error') %}
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            {{ request.args.get('error') }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endif %}
+
+        <!-- Add RFID Card Form -->
+        <div class="card mb-4 p-3">
+            <h4 class="fw-bold mb-3">Link RFID Card to Name</h4>
+            <form method="POST" action="/rfid/add">
+                <div class="row g-3">
+                    <div class="col-md-5">
+                        <label class="form-label">Name</label>
+                        <select name="name" class="form-select" required>
+                            <option value="">-- Select Name --</option>
+                            {% for name in names %}
+                            <option value="{{ name }}">{{ name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">RFID Card ID</label>
+                        <input type="text" name="rfid_id" class="form-control" placeholder="Scan or enter RFID card ID" required autofocus>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">&nbsp;</label>
+                        <button type="submit" class="btn btn-primary w-100">Link Card</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- Linked RFID Cards Table -->
+        <div class="card p-3">
+            <h4 class="fw-bold mb-3">Linked RFID Cards</h4>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered table-hover">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Name</th>
+                            <th>RFID Card ID</th>
+                            <th style="width: 120px;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rfid_id, name in rfid_cards.items() %}
+                        <tr>
+                            <td>{{ name }}</td>
+                            <td><code>{{ rfid_id }}</code></td>
+                            <td>
+                                <a href="/rfid/remove/{{ rfid_id }}" class="btn btn-sm btn-danger" onclick="return confirm('Remove RFID card link?')">Remove</a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="3" class="text-center text-muted">No RFID cards linked</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="text-center mt-4">
+            <a href="/admin" class="admin-link">Go to Admin Page</a> | 
+            <a href="/" class="admin-link">Back to Sign-In</a>
+        </div>
+
+    </div>
+</div>
+<script src="/static/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+

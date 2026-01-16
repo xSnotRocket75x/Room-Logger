@@ -13,19 +13,24 @@
         <h2 class="text-center mb-4 fw-bold">Room Sign-In / Sign-Out</h2>
 
         <!-- ERROR MESSAGE -->
-        {% if error %}
+        {% if error or request.args.get('error') %}
         <div class="alert alert-danger alert-dismissible fade show" role="alert">
-            {{ error }}
+            {{ error or request.args.get('error') }}
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
         {% endif %}
+
+        <!-- RFID Scan Form (hidden, auto-submits when RFID card is scanned) -->
+        <form method="POST" action="/rfid_scan" id="rfidForm" style="position: absolute; left: -9999px;">
+            <input type="text" name="rfid_id" id="rfidInput" autocomplete="off" autofocus>
+        </form>
 
         <!-- Sign In/Out Form -->
         <form method="POST" action="/sign">
             <label class="form-label fw-semibold">Your Name</label>
 
-            <input list="names" name="name" class="form-control form-control-lg"
-                   placeholder="Type or select your name" required
+            <input list="names" name="name" id="nameInput" class="form-control form-control-lg"
+                   placeholder="Type or select your name, or scan RFID card" required
                    value="{{ form_name or '' }}">
 
             <datalist id="names">
@@ -58,7 +63,7 @@
         </form>
 
         <div class="text-center mt-4">
-            <a href="/admin" class="admin-link">Go to Admin Logs</a>
+            <a href="/admin" class="admin-link">Go to Admin Page</a>
         </div>
 
         <hr class="my-4">
@@ -109,6 +114,15 @@
 document.addEventListener("DOMContentLoaded", function() {
     const useCurrentTimeCheckbox = document.getElementById("use_current_time");
     const manualTimeInput = document.getElementById("manual_time");
+    const nameInput = document.getElementById("nameInput");
+    const rfidInput = document.getElementById("rfidInput");
+    const rfidForm = document.getElementById("rfidForm");
+    
+    // Get RFID card IDs from server (passed as template variable)
+    const rfidCardIds = {% if rfid_cards %}{{ rfid_cards.keys()|list|tojson }}{% else %}[]{% endif %};
+    
+    let rfidAutoFocusEnabled = true;
+    let nameFieldActive = false;
     
     // Set initial state based on checkbox
     manualTimeInput.disabled = useCurrentTimeCheckbox.checked;
@@ -116,9 +130,119 @@ document.addEventListener("DOMContentLoaded", function() {
     // Update when checkbox changes
     useCurrentTimeCheckbox.addEventListener("change", function () {
         manualTimeInput.disabled = this.checked;   // Disable when checked
-    if (!this.checked) {
+        if (!this.checked) {
             manualTimeInput.focus();               // Auto-focus when enabled
+        }
+    });
+    
+    // Handle RFID card scanning
+    // RFID scanner types the card ID and presses Enter
+    rfidInput.addEventListener("keydown", function(e) {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            if (rfidInput.value.trim()) {
+                rfidForm.submit();
+            }
+        }
+    });
+    
+    // Clear RFID input after submission or when it loses focus
+    rfidInput.addEventListener("blur", function() {
+        // Small delay to allow form submission to process
+        setTimeout(function() {
+            if (!nameFieldActive) {
+                rfidInput.value = "";
+            }
+        }, 100);
+    });
+    
+    // Check if entered value is an RFID card ID
+    function isRfidCard(value) {
+        return rfidCardIds.includes(value.trim());
     }
+    
+    // Handle RFID card entry in name field
+    nameInput.addEventListener("keydown", function(e) {
+        if (e.key === "Enter") {
+            const enteredValue = nameInput.value.trim();
+            if (enteredValue && isRfidCard(enteredValue)) {
+                e.preventDefault();
+                // Submit as RFID scan
+                rfidInput.value = enteredValue;
+                rfidForm.submit();
+                return;
+            }
+        }
+    });
+    
+    // Also check on blur (when user leaves the field)
+    nameInput.addEventListener("blur", function() {
+        const enteredValue = nameInput.value.trim();
+        if (enteredValue && isRfidCard(enteredValue)) {
+            // Submit as RFID scan
+            rfidInput.value = enteredValue;
+            rfidForm.submit();
+            return;
+        }
+        
+        nameFieldActive = false;
+        // Re-enable after a short delay to allow form submission if needed
+        setTimeout(function() {
+            rfidAutoFocusEnabled = true;
+            if (document.activeElement !== manualTimeInput && 
+                document.activeElement !== useCurrentTimeCheckbox &&
+                document.activeElement !== nameInput) {
+                rfidInput.focus();
+            }
+        }, 500);
+    });
+    
+    // When user focuses on name field, disable RFID auto-focus
+    nameInput.addEventListener("focus", function() {
+        nameFieldActive = true;
+        rfidAutoFocusEnabled = false;
+    });
+    
+    // When user focuses on manual time input, disable RFID auto-focus
+    if (manualTimeInput) {
+        manualTimeInput.addEventListener("focus", function() {
+            rfidAutoFocusEnabled = false;
+        });
+        
+        manualTimeInput.addEventListener("blur", function() {
+            setTimeout(function() {
+                rfidAutoFocusEnabled = true;
+                if (!nameFieldActive && document.activeElement !== nameInput) {
+                    rfidInput.focus();
+                }
+            }, 500);
+        });
+    }
+    
+    // Keep RFID input focused so it's always ready to receive scans
+    // Focus it after a short delay to avoid interfering with page load
+    setTimeout(function() {
+        if (rfidAutoFocusEnabled) {
+            rfidInput.focus();
+        }
+    }, 200);
+    
+    // Re-focus RFID input if user clicks elsewhere (but not on input fields)
+    document.addEventListener("click", function(e) {
+        // Don't auto-focus if clicking on input fields or buttons
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || 
+            e.target.tagName === 'SELECT' || e.target.closest('form')) {
+            return;
+        }
+        
+        // Re-enable auto-focus after a delay
+        setTimeout(function() {
+            if (rfidAutoFocusEnabled && !nameFieldActive && 
+                document.activeElement !== nameInput &&
+                document.activeElement !== manualTimeInput) {
+                rfidInput.focus();
+            }
+        }, 300);
     });
 });
 </script>

@@ -35,15 +35,15 @@
                 
                 <div class="flex-grow-1" id="dateSelector">
                     <label class="form-label small">Select Date:</label>
-                    <select name="date" class="form-select">
+                <select name="date" class="form-select">
                         <option value="">-- Select Date --</option>
-                        {% for date in dates %}
+                    {% for date in dates %}
                         <option value="{{ date }}"
                             {% if selected_date == date %}selected{% endif %}>
                             {{ date }}
                         </option>
-                        {% endfor %}
-                    </select>
+                    {% endfor %}
+                </select>
                 </div>
 
                 <div class="flex-grow-1" id="weekSelector">
@@ -153,9 +153,60 @@
             // Initialize selectors on page load (before event listeners)
             updateSelectors();
             
+            // Set default date/week to today if filter type is set
+            const filterTypeValue = filterTypeSelect.value;
+            if (filterTypeValue === 'date') {
+                const dateSelect = document.querySelector('select[name="date"]');
+                if (dateSelect && !dateSelect.value) {
+                    // Set to today's date
+                    const today = new Date().toISOString().split('T')[0];
+                    // Check if today is in the dates list, if so select it
+                    for (let option of dateSelect.options) {
+                        if (option.value === today) {
+                            option.selected = true;
+                            // Auto-submit to apply the filter
+                            filterForm.submit();
+                            return;
+                        }
+                    }
+                }
+            } else if (filterTypeValue === 'week') {
+                const weekDateInput = document.getElementById('weekDateInput');
+                if (weekDateInput && !weekDateInput.value) {
+                    // Set to today's date
+                    const today = new Date().toISOString().split('T')[0];
+                    weekDateInput.value = today;
+                    // Auto-submit to apply the filter
+                    filterForm.submit();
+                    return;
+                }
+            }
+            
             // Auto-submit on filter type change
             filterTypeSelect.addEventListener('change', function() {
                 updateSelectors();
+                
+                // Set default date/week to today if switching to date/week filter
+                const type = this.value;
+                if (type === 'date') {
+                    const dateSelect = document.querySelector('select[name="date"]');
+                    if (dateSelect && !dateSelect.value) {
+                        const today = new Date().toISOString().split('T')[0];
+                        for (let option of dateSelect.options) {
+                            if (option.value === today) {
+                                option.selected = true;
+                                break;
+                            }
+                        }
+                    }
+                } else if (type === 'week') {
+                    const weekDateInput = document.getElementById('weekDateInput');
+                    if (weekDateInput && !weekDateInput.value) {
+                        const today = new Date().toISOString().split('T')[0];
+                        weekDateInput.value = today;
+                    }
+                }
+                
                 filterForm.submit();
             });
             
@@ -202,6 +253,7 @@
         </script>
 
         <div class="text-center mt-3">
+            <a href="/rfid" class="admin-link">Manage RFID Cards</a> | 
             <a href="/" class="admin-link">Back to Sign-In</a>
         </div>
 

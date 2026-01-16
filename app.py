@@ -15,6 +15,7 @@ app = Flask(__name__)
 DATA_DIR = "data"
 LOG_FILE = os.path.join(DATA_DIR, "logs.json")
 NAMES_FILE = os.path.join(DATA_DIR, "names.json")
+RFID_FILE = os.path.join(DATA_DIR, "rfid_cards.json")
 
 # Template files
 DOCX_TEMPLATES_DIR = "docx_templates"
@@ -86,6 +87,19 @@ def remove_seconds_from_logs():
 
 def load_names():
     return load_json(NAMES_FILE, ["Alice", "Bob", "Charlie", "Diana"])
+
+def load_rfid_cards():
+    """Load RFID card mappings: {rfid_id: name}"""
+    return load_json(RFID_FILE, {})
+
+def save_rfid_cards(rfid_cards):
+    """Save RFID card mappings"""
+    save_json(RFID_FILE, rfid_cards)
+
+def get_name_from_rfid(rfid_id):
+    """Get the name associated with an RFID card ID"""
+    rfid_cards = load_rfid_cards()
+    return rfid_cards.get(rfid_id.strip(), None)
 
 def extract_date(timestamp):
     return timestamp.split(" ")[0]
@@ -546,16 +560,79 @@ def index():
     # Group logs in CSV-style (up to 4 pairs per row)
     grouped_rows = group_logs_csv_style(today_logs)
 
+    # Get error message from query parameters (for RFID scan errors)
+    error_message = request.args.get("error")
+    
+    # Load RFID cards to pass to template for client-side checking
+    rfid_cards = load_rfid_cards()
+    
     return render_template(
         "index.html",
         names=names,
         grouped_rows=grouped_rows,
-        error=None,
+        error=error_message,
         form_name="",
         form_use_current_time=True,
         form_manual_time="",
-        form_action=""
+        form_action="",
+        rfid_cards=rfid_cards
     )
+
+@app.route("/rfid_scan", methods=["POST"])
+def rfid_scan():
+    """Handle RFID card scan - automatically sign in/out based on current state"""
+    from urllib.parse import quote
+    rfid_id = request.form.get("rfid_id", "").strip()
+    
+    if not rfid_id:
+        return redirect(f"/?error={quote('No RFID card detected')}")
+    
+    # Look up name from RFID card
+    name = get_name_from_rfid(rfid_id)
+    if not name:
+        return redirect(f"/?error={quote('RFID card not registered. Please contact administrator.')}")
+    
+    logs = load_logs()
+    names = load_names()
+    
+    # Get current timestamp
+    now = datetime.now()
+    date_str = now.strftime("%Y-%m-%d")
+    time_str = now.strftime("%I:%M %p")
+    timestamp = f"{date_str} {format_time_without_leading_zero(time_str)}"
+    
+    # Get today's logs for this person
+    todays_logs = [
+        log for log in logs
+        if log["name"] == name and log["timestamp"].startswith(date_str)
+    ]
+    
+    # Determine current state (at current time)
+    state_at_timestamp = get_state_at_timestamp(todays_logs, timestamp)
+    
+    # Auto-determine action: if OUT, sign IN; if IN, sign OUT
+    if state_at_timestamp == "IN":
+        action = "OUT"
+    else:
+        action = "IN"
+    
+    # Validate the action
+    if action == "OUT" and state_at_timestamp != "IN":
+        return redirect(f"/?error={quote(f'{name} cannot sign OUT because they are not signed IN.')}")
+    
+    if action == "IN" and state_at_timestamp == "IN":
+        return redirect(f"/?error={quote(f'{name} is already signed IN.')}")
+    
+    # Valid → save log
+    logs.append({
+        "id": len(logs),
+        "name": name,
+        "action": action,
+        "timestamp": timestamp
+    })
+    
+    save_logs(logs)
+    return redirect("/")
 
 @app.route("/sign", methods=["POST"])
 def sign():
@@ -656,6 +733,12 @@ def admin():
             filter_type = "date"
         elif week_date:
             filter_type = "week"
+    
+    # Set default to today's date/week if filter type is set but no date/week specified
+    if filter_type == "date" and not selected_date:
+        selected_date = datetime.now().strftime("%Y-%m-%d")
+    elif filter_type == "week" and not week_date:
+        week_date = datetime.now().strftime("%Y-%m-%d")
     
     dates = sorted(set(extract_date(log["timestamp"]) for log in logs), reverse=True)
 
@@ -988,6 +1071,42 @@ def edit(log_id):
         redirect_url += "?" + urlencode(params)
     
     return redirect(redirect_url)
+
+@app.route("/rfid")
+def rfid_management():
+    """RFID card management page"""
+    names = load_names()
+    rfid_cards = load_rfid_cards()
+    message = request.args.get("message", "")
+    
+    return render_template("rfid.html", names=names, rfid_cards=rfid_cards, message=message)
+
+@app.route("/rfid/add", methods=["POST"])
+def add_rfid_card():
+    """Add or update RFID card association"""
+    from urllib.parse import quote
+    name = request.form.get("name", "").strip()
+    rfid_id = request.form.get("rfid_id", "").strip()
+    
+    if not name or not rfid_id:
+        return redirect(f"/rfid?error={quote('Name and RFID ID are required')}")
+    
+    rfid_cards = load_rfid_cards()
+    rfid_cards[rfid_id] = name
+    save_rfid_cards(rfid_cards)
+    
+    return redirect("/rfid?message=RFID card linked successfully")
+
+@app.route("/rfid/remove/<rfid_id>")
+def remove_rfid_card(rfid_id):
+    """Remove RFID card association"""
+    from urllib.parse import quote
+    rfid_cards = load_rfid_cards()
+    if rfid_id in rfid_cards:
+        del rfid_cards[rfid_id]
+        save_rfid_cards(rfid_cards)
+        return redirect("/rfid?message=RFID card removed successfully")
+    return redirect(f"/rfid?error={quote('RFID card not found')}")
 
 
 if __name__ == "__main__":
