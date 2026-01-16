@@ -560,8 +560,9 @@ def index():
     # Group logs in CSV-style (up to 4 pairs per row)
     grouped_rows = group_logs_csv_style(today_logs)
 
-    # Get error message from query parameters (for RFID scan errors)
+    # Get error/success messages from query parameters
     error_message = request.args.get("error")
+    success_message = request.args.get("success")
     
     # Load RFID cards to pass to template for client-side checking
     rfid_cards = load_rfid_cards()
@@ -571,6 +572,7 @@ def index():
         names=names,
         grouped_rows=grouped_rows,
         error=error_message,
+        success=success_message,
         form_name="",
         form_use_current_time=True,
         form_manual_time="",
@@ -632,7 +634,11 @@ def rfid_scan():
     })
     
     save_logs(logs)
-    return redirect("/")
+    from urllib.parse import quote
+    action_text = "signed IN" if action == "IN" else "signed OUT"
+    time_part = timestamp.split(" ", 1)[1]
+    success_msg = f"{name} successfully {action_text} at {time_part}"
+    return redirect(f"/?success={quote(success_msg)}")
 
 @app.route("/sign", methods=["POST"])
 def sign():
@@ -714,7 +720,11 @@ def sign():
     })
 
     save_logs(logs)
-    return redirect("/")
+    from urllib.parse import quote
+    action_text = "signed IN" if action == "IN" else "signed OUT"
+    time_part = timestamp.split(" ", 1)[1]
+    success_msg = f"{name} successfully {action_text} at {time_part}"
+    return redirect(f"/?success={quote(success_msg)}")
 
 
 # ---------- Admin & Export unchanged ----------
@@ -750,11 +760,18 @@ def admin():
         if monday and friday:
             logs = [log for log in logs if is_date_in_range(extract_date(log["timestamp"]), monday, friday)]
 
+    # Sort logs by newest first (most recent timestamp at top)
+    logs = sorted(logs, key=lambda log: (parse_timestamp_for_sorting(log["timestamp"]), log["id"]), reverse=True)
+
     # Get success message if DOCX export was successful
     message = request.args.get("message", "")
 
+    # Fixed number of rows to always display
+    FIXED_ROW_COUNT = 10
+
     return render_template("admin.html", logs=logs, dates=dates, selected_date=selected_date, 
-                          filter_type=filter_type, week_date=week_date, message=message)
+                          filter_type=filter_type, week_date=week_date, message=message, 
+                          fixed_row_count=FIXED_ROW_COUNT)
 
 
 @app.route("/export")
@@ -1092,6 +1109,12 @@ def add_rfid_card():
         return redirect(f"/rfid?error={quote('Name and RFID ID are required')}")
     
     rfid_cards = load_rfid_cards()
+    
+    # Check if RFID card is already linked to a different person
+    if rfid_id in rfid_cards and rfid_cards[rfid_id] != name:
+        existing_name = rfid_cards[rfid_id]
+        return redirect(f"/rfid?error={quote(f'RFID card is already linked to {existing_name}. Please remove the existing link first.')}")
+    
     rfid_cards[rfid_id] = name
     save_rfid_cards(rfid_cards)
     

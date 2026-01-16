@@ -12,20 +12,18 @@
 
         <h2 class="text-center fw-bold mb-3">RFID Card Management</h2>
 
-        <!-- Success/Error Message -->
-        {% if message %}
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
-            {{ message }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        <!-- Toast Container -->
+        <div class="toast-container position-fixed top-50 start-50 translate-middle" style="z-index: 11;">
+            <div id="toastMessage" class="toast" role="alert" aria-live="assertive" aria-atomic="true" style="min-width: 400px; font-size: 1.1rem; background-color: white; border: 2px solid #dee2e6;">
+                <div class="toast-header" style="font-size: 1.2rem; font-weight: 600; background-color: white; border-bottom: 1px solid #dee2e6;">
+                    <strong class="me-auto" id="toastTitle">Notification</strong>
+                    <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+                <div class="toast-body" id="toastBody" style="font-size: 1.1rem; padding: 1.25rem; color: #212529;">
+                    <!-- Message will be inserted here -->
+                </div>
+            </div>
         </div>
-        {% endif %}
-        
-        {% if request.args.get('error') %}
-        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-            {{ request.args.get('error') }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-        {% endif %}
 
         <!-- Add RFID Card Form -->
         <div class="card mb-4 p-3">
@@ -92,6 +90,67 @@
     </div>
 </div>
 <script src="/static/bootstrap.bundle.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    // Show toast notification if there's a success or error message
+    {% if message %}
+    const successMsg = {{ message|tojson }};
+    {% else %}
+    const successMsg = null;
+    {% endif %}
+    
+    {% if request.args.get('error') %}
+    const errorMsg = {{ request.args.get('error')|tojson }};
+    {% else %}
+    const errorMsg = null;
+    {% endif %}
+    
+    // Show toast notification if there's a success or error message
+    function showToast() {
+        if (typeof bootstrap === 'undefined') {
+            // Bootstrap not loaded yet, wait a bit
+            setTimeout(showToast, 50);
+            return;
+        }
+        
+        if (successMsg || errorMsg) {
+            const toastEl = document.getElementById('toastMessage');
+            const toastTitle = document.getElementById('toastTitle');
+            const toastBody = document.getElementById('toastBody');
+            
+            if (toastEl && toastTitle && toastBody) {
+                if (successMsg) {
+                    // Success styling - white background with green accent border
+                    toastEl.style.backgroundColor = 'white';
+                    toastEl.style.border = '3px solid #28a745';
+                    toastTitle.innerHTML = '<span style="color: #28a745;">✓</span> Success!';
+                    toastTitle.style.color = '#28a745';
+                    toastBody.textContent = successMsg;
+                    toastBody.style.color = '#212529';
+                } else if (errorMsg) {
+                    // Error styling - white background with red accent border
+                    toastEl.style.backgroundColor = 'white';
+                    toastEl.style.border = '3px solid #dc3545';
+                    toastTitle.innerHTML = '<span style="color: #dc3545;">⚠</span> Error';
+                    toastTitle.style.color = '#dc3545';
+                    toastBody.textContent = errorMsg;
+                    toastBody.style.color = '#212529';
+                }
+                
+                // Add shadow and rounded corners for better appearance
+                toastEl.style.boxShadow = '0 0.5rem 1.5rem rgba(0, 0, 0, 0.2)';
+                toastEl.style.borderRadius = '0.75rem';
+                
+                const toast = new bootstrap.Toast(toastEl, { autohide: true, delay: 3000 });
+                toast.show();
+            }
+        }
+    }
+    
+    // Try to show toast immediately, or wait for Bootstrap
+    showToast();
+});
+</script>
 </body>
 </html>
 

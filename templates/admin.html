@@ -65,12 +65,14 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for log in logs %}
+                    {% set row_count = [logs|length, fixed_row_count|default(10)]|max %}
+                    {% for i in range(row_count) %}
+                    {% if i < logs|length %}
                     <tr>
-                        <td>{{ log.name }}</td>
-                        <td>{{ log.action }}</td>
+                        <td>{{ logs[i].name }}</td>
+                        <td>{{ logs[i].action }}</td>
                         <td>
-                            <form method="POST" action="/edit/{{ log.id }}" class="d-flex gap-1">
+                            <form method="POST" action="/edit/{{ logs[i].id }}" class="d-flex gap-1">
                                 {% if filter_type %}
                                 <input type="hidden" name="filter_type" value="{{ filter_type }}">
                                 {% endif %}
@@ -80,17 +82,25 @@
                                 {% if week_date %}
                                 <input type="hidden" name="week_date" value="{{ week_date }}">
                                 {% endif %}
-                                <input type="text" name="timestamp" value="{{ log.timestamp }}"
+                                <input type="text" name="timestamp" value="{{ logs[i].timestamp }}"
                                     class="form-control form-control-sm">
                                 <button class="btn btn-sm btn-success">Save</button>
                             </form>
                         </td>
 
                         <td>
-                            <a href="/remove/{{ log.id }}" class="btn btn-sm btn-danger delete-link" data-log-id="{{ log.id }}">Delete</a>
+                            <a href="/remove/{{ logs[i].id }}" class="btn btn-sm btn-danger delete-link" data-log-id="{{ logs[i].id }}">Delete</a>
                         </td>
 
                     </tr>
+                    {% else %}
+                    <tr style="height: 48px;">
+                        <td>&nbsp;</td>
+                        <td>&nbsp;</td>
+                        <td>&nbsp;</td>
+                        <td>&nbsp;</td>
+                    </tr>
+                    {% endif %}
                     {% endfor %}
                 </tbody>
             </table>

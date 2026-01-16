@@ -12,16 +12,25 @@ A Flask-based web application for tracking room sign-in and sign-out times. User
   - Dedicated page for linking RFID card IDs to user names
   - View all linked RFID cards
   - Add or remove RFID card associations
-- **Admin Dashboard**: View, edit, and delete log entries
+- **Admin Dashboard**: 
+  - View, edit, and delete log entries
+  - Logs sorted by newest first (most recent at top)
+  - Fixed table size: Always displays at least 10 rows (empty rows if fewer logs), or all rows if more than 10
 - **Filtering**: 
   - Filter logs by date, working week (Monday-Friday), or view all dates
   - Auto-selects today's date/week when filtering by date or week
+  - Filters automatically apply when selection changes (no need to press a button)
 - **Export Options**: 
   - Export to CSV format
   - Export to DOCX format (using FH306 Sign-In Sheet template)
 - **Validation**: 
   - Prevents invalid sign-in/out sequences (e.g., can't sign out if not signed in)
   - Validates based on timestamp being submitted, not current state
+  - Prevents linking an RFID card that's already linked to another person
+- **User Feedback**: 
+  - Toast notifications for successful sign-in/out actions
+  - Error toasts for validation errors and unregistered RFID cards
+  - Auto-dismissing toasts (3 seconds) with centered display
 - **Chronological Sorting**: Logs are automatically sorted by timestamp, even if added out of sequence
 - **Offline Support**: All dependencies are local - no internet connection required
 
@@ -75,6 +84,8 @@ http://localhost:8080
    - Link RFID card IDs to user names
    - View all linked RFID cards
    - Remove RFID card associations
+   - Prevents duplicate card assignments (shows error if card is already linked to another person)
+   - Toast notifications for success/error messages
 
 ## File Structure
 
@@ -122,6 +133,7 @@ Room_Logger/
    - **Direct Scanning**: The hidden RFID input field is always ready to receive scans
    - **Manual Entry**: Users can also type their RFID card ID in the name field - it will be automatically recognized
    - **Auto Sign In/Out**: The system automatically determines whether to sign in or out based on current state
+   - **Error Handling**: If an unregistered RFID card is scanned, an error toast will appear prompting the user to contact an administrator
 
 ## Notes
 
