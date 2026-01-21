@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Room Sign-In</title>
+    <link rel="stylesheet" href="/static/bootstrap.min.css">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+<div class="main-container">
+    <div class="card shadow-lg p-4 form-card">
+
+        <h2 class="text-center mb-4 fw-bold">Room Sign-In / Sign-Out</h2>
+
+        <!-- RFID Scan Form (hidden, auto-submits when RFID card is scanned) -->
+        <form method="POST" action="/rfid_scan" id="rfidForm" style="position: absolute; left: -9999px;">
+            <input type="text" name="rfid_id" id="rfidInput" autocomplete="off" autofocus>
+        </form>
+
+        <!-- Sign In/Out Form -->
+        <form method="POST" action="/sign">
+            <label class="form-label fw-semibold">Your Name</label>
+
+            <input list="names" name="name" id="nameInput" class="form-control form-control-lg"
+                   placeholder="Type or select your name, or scan RFID card" required
+                   value="{{ form_name or '' }}">
+
+            <datalist id="names">
+                {% for name in names %}
+                    <option value="{{ name }}">
+                {% endfor %}
+            </datalist>
+
+            <!-- Time Selection -->
+            <label class="form-label fw-semibold mt-3">Time</label>
+
+            <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" id="use_current_time" name="use_current_time"
+                       {% if form_use_current_time is not defined or form_use_current_time == True %}checked{% endif %}>
+                <label class="form-check-label" for="use_current_time">
+                    Use current time
+                </label>
+            </div>
+
+            <input type="time" id="manual_time" name="manual_time"
+                class="form-control form-control-lg"
+                value="{{ form_manual_time or '' }}"
+                {% if form_use_current_time is not defined or form_use_current_time == True %}disabled{% endif %}>
+
+
+            <div class="d-flex justify-content-center gap-3 mt-4">
+                <button name="action" value="IN" class="btn btn-success btn-lg px-4 {% if form_action == 'IN' %}active{% endif %}">Sign In</button>
+                <button name="action" value="OUT" class="btn btn-danger btn-lg px-4 {% if form_action == 'OUT' %}active{% endif %}">Sign Out</button>
+            </div>
+        </form>
+
+        <div class="text-center mt-4">
+            <a href="/admin" class="admin-link">Go to Admin Page</a>
+        </div>
+
+        <hr class="my-4">
+
+        <!-- CSV-Style Logs Table -->
+        <h3 class="text-center mb-3 fw-bold">Current Logs</h3>
+
+        <div class="table-responsive">
+            <table class="table table-striped table-bordered bg-white text-dark">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Name</th>
+                        <th>Date</th>
+                        <th>Time In</th><th>Time Out</th>
+                        <th>Time In</th><th>Time Out</th>
+                        <th>Time In</th><th>Time Out</th>
+                        <th>Time In</th><th>Time Out</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for name, date, pairs in grouped_rows %}
+                        {% set chunk = pairs[:4] %}
+                        <tr>
+                            <td>{{ name }}</td>
+                            <td>{{ date }}</td>
+
+                            {% for pin, pout in chunk %}
+                                <td>{{ pin }}</td>
+                                <td>{{ pout }}</td>
+                            {% endfor %}
+
+                            {% for i in range(4 - chunk|length) %}
+                                <td></td><td></td>
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container position-fixed top-50 start-50 translate-middle" style="z-index: 11;">
+    <div id="toastMessage" class="toast" role="alert" aria-live="assertive" aria-atomic="true" style="min-width: 400px; font-size: 1.1rem; background-color: white; border: 2px solid #dee2e6;">
+        <div class="toast-header" style="font-size: 1.2rem; font-weight: 600; background-color: white; border-bottom: 1px solid #dee2e6;">
+            <strong class="me-auto" id="toastTitle">Notification</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        <div class="toast-body" id="toastBody" style="font-size: 1.1rem; padding: 1.25rem; color: #212529;">
+            <!-- Message will be inserted here -->
+        </div>
+    </div>
+</div>
+
+<script src="/static/bootstrap.bundle.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    // Show toast notification if there's a success or error message
+    {% if success or request.args.get('success') %}
+    const successMsg = {{ (success or request.args.get('success'))|tojson }};
+    {% else %}
+    const successMsg = null;
+    {% endif %}
+    
+    {% if error or request.args.get('error') %}
+    const errorMsg = {{ (error or request.args.get('error'))|tojson }};
+    {% else %}
+    const errorMsg = null;
+    {% endif %}
+    
+    // Show toast notification if there's a success or error message
+    function showToast() {
+        if (typeof bootstrap === 'undefined') {
+            // Bootstrap not loaded yet, wait a bit
+            setTimeout(showToast, 50);
+            return;
+        }
+        
+        if (successMsg || errorMsg) {
+            const toastEl = document.getElementById('toastMessage');
+            const toastTitle = document.getElementById('toastTitle');
+            const toastBody = document.getElementById('toastBody');
+            
+            if (toastEl && toastTitle && toastBody) {
+                if (successMsg) {
+                    // Success styling - white background with green accent border
+                    toastEl.style.backgroundColor = 'white';
+                    toastEl.style.border = '3px solid #28a745';
+                    toastTitle.innerHTML = '<span style="color: #28a745;">✓</span> Success!';
+                    toastTitle.style.color = '#28a745';
+                    toastBody.textContent = successMsg;
+                    toastBody.style.color = '#212529';
+                } else if (errorMsg) {
+                    // Error styling - white background with red accent border
+                    toastEl.style.backgroundColor = 'white';
+                    toastEl.style.border = '3px solid #dc3545';
+                    toastTitle.innerHTML = '<span style="color: #dc3545;">⚠</span> Error';
+                    toastTitle.style.color = '#dc3545';
+                    toastBody.textContent = errorMsg;
+                    toastBody.style.color = '#212529';
+                }
+                
+                // Add shadow and rounded corners for better appearance
+                toastEl.style.boxShadow = '0 0.5rem 1.5rem rgba(0, 0, 0, 0.2)';
+                toastEl.style.borderRadius = '0.75rem';
+                
+                const toast = new bootstrap.Toast(toastEl, { autohide: true, delay: 3000 });
+                toast.show();
+            }
+        }
+    }
+    
+    // Try to show toast immediately, or wait for Bootstrap
+    showToast();
+    
+    const useCurrentTimeCheckbox = document.getElementById("use_current_time");
+    const manualTimeInput = document.getElementById("manual_time");
+    const nameInput = document.getElementById("nameInput");
+    const rfidInput = document.getElementById("rfidInput");
+    const rfidForm = document.getElementById("rfidForm");
+    
+    // Get RFID card IDs from server (passed as template variable)
+    const rfidCardIds = {% if rfid_cards %}{{ rfid_cards.keys()|list|tojson }}{% else %}[]{% endif %};
+    
+    let rfidAutoFocusEnabled = true;
+    let nameFieldActive = false;
+    
+    // Set initial state based on checkbox
+    manualTimeInput.disabled = useCurrentTimeCheckbox.checked;
+    
+    // Update when checkbox changes
+    useCurrentTimeCheckbox.addEventListener("change", function () {
+        manualTimeInput.disabled = this.checked;   // Disable when checked
+    if (!this.checked) {
+            manualTimeInput.focus();               // Auto-focus when enabled
+    }
+    });
+    
+    // Handle RFID card scanning
+    // RFID scanner types the card ID and presses Enter
+    rfidInput.addEventListener("keydown", function(e) {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            if (rfidInput.value.trim()) {
+                rfidForm.submit();
+            }
+        }
+    });
+    
+    // Clear RFID input after submission or when it loses focus
+    rfidInput.addEventListener("blur", function() {
+        // Small delay to allow form submission to process
+        setTimeout(function() {
+            if (!nameFieldActive) {
+                rfidInput.value = "";
+            }
+        }, 100);
+    });
+    
+    // Normalize RFID ID (uppercase, hex characters only) - matches server-side normalization
+    function normalizeRfidId(value) {
+        if (!value) return "";
+        // Convert to uppercase and keep only hex characters (0-9, A-F)
+        return value.trim().toUpperCase().replace(/[^0-9A-F]/g, '');
+    }
+    
+    // Check if entered value is an RFID card ID (normalized comparison)
+    function isRfidCard(value) {
+        const normalized = normalizeRfidId(value);
+        return normalized && rfidCardIds.includes(normalized);
+    }
+    
+    // Handle RFID card entry in name field
+    nameInput.addEventListener("keydown", function(e) {
+        if (e.key === "Enter") {
+            const enteredValue = nameInput.value.trim();
+            const normalizedValue = normalizeRfidId(enteredValue);
+            if (normalizedValue && isRfidCard(enteredValue)) {
+                e.preventDefault();
+                // Submit as RFID scan (use normalized value)
+                rfidInput.value = normalizedValue;
+                rfidForm.submit();
+                return;
+            }
+        }
+    });
+    
+    // Also check on blur (when user leaves the field)
+    nameInput.addEventListener("blur", function() {
+        const enteredValue = nameInput.value.trim();
+        const normalizedValue = normalizeRfidId(enteredValue);
+        if (normalizedValue && isRfidCard(enteredValue)) {
+            // Submit as RFID scan (use normalized value)
+            rfidInput.value = normalizedValue;
+            rfidForm.submit();
+            return;
+        }
+        
+        nameFieldActive = false;
+        // Re-enable after a short delay to allow form submission if needed
+        setTimeout(function() {
+            rfidAutoFocusEnabled = true;
+            if (document.activeElement !== manualTimeInput && 
+                document.activeElement !== useCurrentTimeCheckbox &&
+                document.activeElement !== nameInput) {
+                rfidInput.focus();
+            }
+        }, 500);
+    });
+    
+    // When user focuses on name field, disable RFID auto-focus
+    nameInput.addEventListener("focus", function() {
+        nameFieldActive = true;
+        rfidAutoFocusEnabled = false;
+    });
+    
+    // When user focuses on manual time input, disable RFID auto-focus
+    if (manualTimeInput) {
+        manualTimeInput.addEventListener("focus", function() {
+            rfidAutoFocusEnabled = false;
+        });
+        
+        manualTimeInput.addEventListener("blur", function() {
+            setTimeout(function() {
+                rfidAutoFocusEnabled = true;
+                if (!nameFieldActive && document.activeElement !== nameInput) {
+                    rfidInput.focus();
+                }
+            }, 500);
+        });
+    }
+    
+    // Keep RFID input focused so it's always ready to receive scans
+    // Focus it after a short delay to avoid interfering with page load
+    setTimeout(function() {
+        if (rfidAutoFocusEnabled) {
+            rfidInput.focus();
+        }
+    }, 200);
+    
+    // Re-focus RFID input if user clicks elsewhere (but not on input fields)
+    document.addEventListener("click", function(e) {
+        // Don't auto-focus if clicking on input fields or buttons
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || 
+            e.target.tagName === 'SELECT' || e.target.closest('form')) {
+            return;
+        }
+        
+        // Re-enable auto-focus after a delay
+        setTimeout(function() {
+            if (rfidAutoFocusEnabled && !nameFieldActive && 
+                document.activeElement !== nameInput &&
+                document.activeElement !== manualTimeInput) {
+                rfidInput.focus();
+            }
+        }, 300);
+    });
+});
+</script>
+</body>
+</html>
