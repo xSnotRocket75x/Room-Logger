@@ -20,17 +20,22 @@ A Flask-based web application for tracking room sign-in and sign-out times. User
   - Filter logs by date, working week (Monday-Friday), or view all dates
   - Auto-selects today's date/week when filtering by date or week
   - Filters automatically apply when selection changes (no need to press a button)
+  - Filter state is preserved when editing or deleting entries (stays on current filter unless explicitly changed)
+  - Date dropdown persists selected date even after deleting all logs from that date (until filter is changed)
 - **Export Options**: 
   - Export to CSV format
   - Export to DOCX format (using FH306 Sign-In Sheet template)
+  - Error handling: Shows error toast if attempting to export with no logs for selected date/week
 - **Validation**: 
   - Prevents invalid sign-in/out sequences (e.g., can't sign out if not signed in)
   - Validates based on timestamp being submitted, not current state
   - Prevents linking an RFID card that's already linked to another person
 - **User Feedback**: 
-  - Toast notifications for successful sign-in/out actions
+  - Toast notifications for successful sign-in/out actions (main page)
+  - Toast notifications for export success/errors (admin page)
   - Error toasts for validation errors and unregistered RFID cards
   - Auto-dismissing toasts (3 seconds) with centered display
+  - Consistent toast styling across all pages (centered, colored borders, icons)
 - **Chronological Sorting**: Logs are automatically sorted by timestamp, even if added out of sequence
 - **Offline Support**: All dependencies are local - no internet connection required
 
@@ -76,9 +81,10 @@ http://localhost:8080
 4. **Admin Page** (`/admin`):
    - View all logs or filter by date/week (defaults to today when filtering)
    - Edit timestamps directly
-   - Delete log entries
-   - Export to CSV or DOCX
+   - Delete log entries (filter state is preserved after deletion)
+   - Export to CSV or DOCX (shows error toast if no logs found for selected filter)
    - Link to RFID Card Management page
+   - Toast notifications for export success/errors (matching main page style)
 
 5. **RFID Card Management Page** (`/rfid`):
    - Link RFID card IDs to user names

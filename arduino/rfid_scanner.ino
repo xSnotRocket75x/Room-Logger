@@ -21,6 +21,18 @@ void setup(void) {
   Keyboard.begin();
 }
 
+// Helper function to print a single hex digit safely with delay
+void printHexDigit(uint8_t digit) {
+  // Convert value 0-15 to character 0-9 or A-F
+  if (digit < 10) {
+    Keyboard.print((char)('0' + digit));
+  } else {
+    Keyboard.print((char)('A' + (digit - 10)));
+  }
+  // CRITICAL: Small delay to let Linux process the key state (Shift Up/Down)
+  delay(10); 
+}
+
 void loop(void) {
   uint8_t success;
   uint8_t uid[] = { 0, 0, 0, 0, 0, 0, 0 };
@@ -30,17 +42,19 @@ void loop(void) {
 
   if (success) {
     for (uint8_t i = 0; i < uidLength; i++) {
-      if (uid[i] < 0x10) {
-        Keyboard.print("0");
-      }
-      Keyboard.print(uid[i], HEX);
+      // Print the high nibble (first digit)
+      printHexDigit(uid[i] >> 4);
+      
+      // Print the low nibble (second digit)
+      printHexDigit(uid[i] & 0x0F);
     }
 
     Keyboard.write(KEY_RETURN);
 
-    TXLED1;
+    // Visual feedback
+    digitalWrite(LED_BUILTIN_TX, LOW); // TXLED1 equivalent usually
     delay(500);
-    TXLED0;
+    digitalWrite(LED_BUILTIN_TX, HIGH);
 
     delay(2000);
   }

@@ -733,16 +733,19 @@ def sign():
 def admin():
     logs = load_logs()
 
-    filter_type = request.args.get("filter_type", "all")
+    filter_type = request.args.get("filter_type")
     selected_date = request.args.get("date")
     week_date = request.args.get("week_date")
+    docx_exported = request.args.get("docx_exported")
+    csv_exported = request.args.get("csv_exported")
 
-    # Auto-detect filter type if not explicitly set
-    if filter_type == "all":
-        if selected_date:
-            filter_type = "date"
-        elif week_date:
-            filter_type = "week"
+    # Default to "all" if no filter_type is specified
+    if not filter_type:
+        filter_type = "all"
+    # If filter_type is explicitly "all", ignore any date/week parameters
+    elif filter_type == "all":
+        selected_date = None
+        week_date = None
     
     # Set default to today's date/week if filter type is set but no date/week specified
     if filter_type == "date" and not selected_date:
@@ -751,6 +754,12 @@ def admin():
         week_date = datetime.now().strftime("%Y-%m-%d")
     
     dates = sorted(set(extract_date(log["timestamp"]) for log in logs), reverse=True)
+    
+    # If filtering by date and selected_date is not in dates (no logs for that date),
+    # add it to dates so it appears in the dropdown and stays selected
+    if filter_type == "date" and selected_date and selected_date not in dates:
+        dates.append(selected_date)
+        dates = sorted(dates, reverse=True)
 
     # Filter logs based on filter type
     if filter_type == "date" and selected_date:
@@ -763,15 +772,24 @@ def admin():
     # Sort logs by newest first (most recent timestamp at top)
     logs = sorted(logs, key=lambda log: (parse_timestamp_for_sorting(log["timestamp"]), log["id"]), reverse=True)
 
-    # Get success message if DOCX export was successful
+    # Get message (success or error) for DOCX export
     message = request.args.get("message", "")
 
     # Fixed number of rows to always display
     FIXED_ROW_COUNT = 10
 
-    return render_template("admin.html", logs=logs, dates=dates, selected_date=selected_date, 
-                          filter_type=filter_type, week_date=week_date, message=message, 
-                          fixed_row_count=FIXED_ROW_COUNT)
+    return render_template(
+        "admin.html",
+        logs=logs,
+        dates=dates,
+        selected_date=selected_date,
+        filter_type=filter_type,
+        week_date=week_date,
+        message=message,
+        docx_exported=docx_exported,
+        csv_exported=csv_exported,
+        fixed_row_count=FIXED_ROW_COUNT,
+    )
 
 
 @app.route("/export")
@@ -784,11 +802,21 @@ def export():
     if selected_date:
         logs = [log for log in logs if extract_date(log["timestamp"]) == selected_date]
         filename = CSV_DATE_FILENAME_TEMPLATE.format(date=selected_date)
+        # Check if no logs found for selected date
+        if not logs:
+            from urllib.parse import quote
+            message = f"No logs found for date {selected_date}."
+            return redirect(f"/admin?filter_type=date&date={quote(selected_date)}&csv_exported=0&message={quote(message)}")
     elif week_date:
         monday, friday = get_week_range(week_date)
         if monday and friday:
             logs = [log for log in logs if is_date_in_range(extract_date(log["timestamp"]), monday, friday)]
             filename = CSV_DATE_FILENAME_TEMPLATE.format(date=f"{monday}_to_{friday}")
+            # Check if no logs found for selected week
+            if not logs:
+                from urllib.parse import quote
+                message = f"No logs found for week {monday} to {friday}."
+                return redirect(f"/admin?filter_type=week&week_date={quote(week_date)}&csv_exported=0&message={quote(message)}")
 
     # IMPORTANT: Sort by timestamp first (chronological order), then by ID as tiebreaker
     # This ensures logs are in chronological order even if added out of sequence
@@ -816,7 +844,7 @@ def export():
             "Time In", "Time Out",
             "Time In", "Time Out",
             "Time In", "Time Out",
-            "Time In", "Time Out"
+            "Time In", "Time Out",
         ]
         writer.writerow(header)
 
@@ -843,28 +871,29 @@ def export():
             # Missing OUT at the end?
             if current_in is not None:
                 pairs.append((current_in, ""))
-        
-        # Split into 4-pair rows (CSV-compatible)
-        for i in range(0, len(pairs), 4):
-            chunk = pairs[i:i+4]
-            # Format date for display (e.g., "Apr. 15" instead of "2025-04-15")
-            formatted_date = format_date_for_display(date)
-            row = [name, formatted_date]
-            
-            for pin, pout in chunk:
-                row.extend([pin, pout])
-            
-            while len(row) < 10:
-                row.extend(["", ""])
-            
-            writer.writerow(row)
-            rows_for_docx.append(row)
+
+            # Split into 4-pair rows (CSV-compatible)
+            for i in range(0, len(pairs), 4):
+                chunk = pairs[i:i+4]
+                # Format date for display (e.g., "Apr. 15" instead of "2025-04-15")
+                formatted_date = format_date_for_display(date)
+                row = [name, formatted_date]
+
+                for pin, pout in chunk:
+                    row.extend([pin, pout])
+
+                while len(row) < 10:
+                    row.extend(["", ""])
+
+                writer.writerow(row)
+                rows_for_docx.append(row)
 
     # Also write the same data into a copy of the FH306 Sign-In Sheet DOCX
     # Note: rows_for_docx has formatted dates, but export_to_docx needs original dates for grouping
     # For single date exports, pass the date. For week or all exports, pass None to create one DOCX per date
     docx_date = selected_date if selected_date else None
-    export_to_docx(rows_for_docx, docx_date)
+    if rows_for_docx:
+        export_to_docx(rows_for_docx, docx_date)
 
     return send_file(filename, as_attachment=True)
 
@@ -1036,19 +1065,20 @@ def remove(log_id):
 
     save_logs(logs)
     
-    # Preserve filter parameters in redirect
+    # Preserve filter parameters in redirect, but only if filter_type is explicitly set
     from urllib.parse import urlencode
     filter_type = request.args.get("filter_type", "")
     selected_date = request.args.get("date", "")
     week_date = request.args.get("week_date", "")
     
     params = {}
-    if filter_type:
+    # Only preserve parameters if filter_type is explicitly set and is not "all"
+    if filter_type and filter_type != "all":
         params["filter_type"] = filter_type
-    if selected_date:
-        params["date"] = selected_date
-    if week_date:
-        params["week_date"] = week_date
+        if filter_type == "date" and selected_date:
+            params["date"] = selected_date
+        elif filter_type == "week" and week_date:
+            params["week_date"] = week_date
     
     redirect_url = "/admin"
     if params:
@@ -1070,18 +1100,20 @@ def edit(log_id):
     save_logs(logs)
     
     # Preserve filter parameters in redirect (from form data for POST requests)
+    # Only preserve if filter_type is explicitly set and is not "all"
     from urllib.parse import urlencode
     filter_type = request.form.get("filter_type", "")
     selected_date = request.form.get("date", "")
     week_date = request.form.get("week_date", "")
     
     params = {}
-    if filter_type:
+    # Only preserve parameters if filter_type is explicitly set and is not "all"
+    if filter_type and filter_type != "all":
         params["filter_type"] = filter_type
-    if selected_date:
-        params["date"] = selected_date
-    if week_date:
-        params["week_date"] = week_date
+        if filter_type == "date" and selected_date:
+            params["date"] = selected_date
+        elif filter_type == "week" and week_date:
+            params["week_date"] = week_date
     
     redirect_url = "/admin"
     if params:

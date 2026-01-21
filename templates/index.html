@@ -192,9 +192,9 @@ document.addEventListener("DOMContentLoaded", function() {
     // Update when checkbox changes
     useCurrentTimeCheckbox.addEventListener("change", function () {
         manualTimeInput.disabled = this.checked;   // Disable when checked
-        if (!this.checked) {
+    if (!this.checked) {
             manualTimeInput.focus();               // Auto-focus when enabled
-        }
+    }
     });
     
     // Handle RFID card scanning
